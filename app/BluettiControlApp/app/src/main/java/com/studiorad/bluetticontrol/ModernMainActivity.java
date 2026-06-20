@@ -61,19 +61,20 @@ public class ModernMainActivity extends MainActivity {
         b.setTextColor(Color.WHITE);
         b.setTextSize(14);
         b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        b.setMinHeight(dp2(54));
-        b.setPadding(dp2(10), dp2(8), dp2(10), dp2(8));
+        b.setMinHeight(dp2(58));
+        b.setPadding(dp2(10), dp2(10), dp2(10), dp2(10));
+        b.setElevation(dp2(4));
 
         int color = modernBlue;
         String label = t.toLowerCase();
         if (label.contains("off") || label.contains("desconectar") || label.contains("limpar") || label.contains("parar")) {
-            color = Color.rgb(210, 49, 72);
+            color = Color.rgb(230, 56, 72);
         } else if (label.contains("on") || label.contains("conectar") || label.contains("salvar") || label.contains("adicionar")) {
-            color = Color.rgb(0, 135, 86);
+            color = Color.rgb(0, 166, 97);
         } else if (label.contains("reconectar") || label.contains("testar")) {
             color = Color.rgb(92, 72, 230);
         }
-        b.setBackground(shape(color, 16));
+        b.setBackground(shape(color, 18));
         return b;
     }
 
@@ -81,7 +82,8 @@ public class ModernMainActivity extends MainActivity {
     TextView metric(String title) {
         TextView v = tv(title + ": --", 17, modernDark);
         v.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        v.setBackground(strokeShape(Color.WHITE, Color.rgb(226, 233, 244), 16));
+        v.setBackground(strokeShape(Color.WHITE, Color.rgb(226, 233, 244), 18));
+        v.setElevation(dp2(3));
         v.setPadding(dp2(18), dp2(16), dp2(18), dp2(16));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.setMargins(0, dp2(6), 0, dp2(6));
@@ -94,9 +96,10 @@ public class ModernMainActivity extends MainActivity {
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
         c.setPadding(dp2(16), dp2(16), dp2(16), dp2(16));
-        c.setBackground(strokeShape(Color.WHITE, Color.rgb(226, 233, 244), 24));
+        c.setBackground(strokeShape(Color.WHITE, Color.rgb(224, 231, 242), 24));
+        c.setElevation(dp2(6));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.setMargins(dp2(12), dp2(8), dp2(12), dp2(8));
+        lp.setMargins(dp2(12), dp2(9), dp2(12), dp2(9));
         c.setLayoutParams(lp);
         return c;
     }
