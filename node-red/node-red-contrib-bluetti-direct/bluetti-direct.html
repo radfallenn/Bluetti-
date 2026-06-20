@@ -1,0 +1,50 @@
+<script type="text/javascript">
+RED.nodes.registerType('bluetti-direct', {
+  category: 'Bluetti',
+  color: '#2b7cff',
+  defaults: {
+    name: { value: '' },
+    mac: { value: '', required: true },
+    interval: { value: 30, required: true, validate: RED.validators.number() },
+    autoStart: { value: true }
+  },
+  inputs: 1,
+  outputs: 2,
+  icon: 'font-awesome/fa-battery-three-quarters',
+  label: function () { return this.name || 'bluetti direct'; },
+  paletteLabel: 'bluetti direct'
+});
+</script>
+
+<script type="text/html" data-template-name="bluetti-direct">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Nome</label>
+    <input type="text" id="node-input-name" placeholder="Bluetti Garagem">
+  </div>
+  <div class="form-row">
+    <label for="node-input-mac"><i class="fa fa-bluetooth"></i> MAC</label>
+    <input type="text" id="node-input-mac" placeholder="AA:BB:CC:DD:EE:FF">
+  </div>
+  <div class="form-row">
+    <label for="node-input-interval"><i class="fa fa-clock-o"></i> Intervalo</label>
+    <input type="number" id="node-input-interval" placeholder="30"> segundos
+  </div>
+  <div class="form-row">
+    <label for="node-input-autoStart"><i class="fa fa-play"></i> Auto iniciar</label>
+    <input type="checkbox" id="node-input-autoStart" style="display:inline-block;width:auto;vertical-align:top;">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="bluetti-direct">
+  <p>Nó Node-RED para Bluetti via Bluetooth BLE direto.</p>
+  <p><b>Entrada:</b></p>
+  <ul>
+    <li><code>{"command":"read"}</code></li>
+    <li><code>{"command":"ac_on"}</code></li>
+    <li><code>{"command":"ac_off"}</code></li>
+    <li><code>{"command":"dc_on"}</code></li>
+    <li><code>{"command":"dc_off"}</code></li>
+  </ul>
+  <p><b>Saída 1:</b> status com bateria, entrada, saída e AC/DC.</p>
+  <p><b>Saída 2:</b> erros e eventos técnicos.</p>
+</script>
