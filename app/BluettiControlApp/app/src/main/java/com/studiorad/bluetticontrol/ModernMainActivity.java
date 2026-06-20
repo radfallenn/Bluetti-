@@ -1,106 +1,59 @@
 package com.studiorad.bluetticontrol;
 
-import android.graphics.Color;
-import android.graphics.Typeface;
+import android.graphics.*;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
-import android.view.View;
-import android.widget.Button;
-import android.widget.LinearLayout;
-import android.widget.TextView;
+import android.view.*;
+import android.widget.*;
+import java.util.*;
 
 public class ModernMainActivity extends MainActivity {
-    int modernBlue = Color.rgb(18, 102, 210);
-    int modernDark = Color.rgb(18, 28, 45);
-    int modernMuted = Color.rgb(92, 108, 130);
-    int modernBg = Color.rgb(244, 247, 252);
+    int navy=Color.rgb(20,45,78), bg2=Color.rgb(246,249,253), blue2=Color.rgb(52,119,237), green2=Color.rgb(0,170,95), red2=Color.rgb(235,45,55), orange2=Color.rgb(238,126,28), muted=Color.rgb(105,120,145);
+    TextView heroName, heroSoc, heroTime, statBattery, statInput, statOutput, statTemp, graphFooterBattery, graphFooterInput, graphFooterOutput, graphStamp;
+    CombinedGraph comboGraph;
+    long lastGraphPaint=0;
+    ArrayList<Integer> comboBattery=new ArrayList<>(), comboLoad=new ArrayList<>();
 
-    @Override
-    public void onCreate(Bundle b) {
-        super.onCreate(b);
-        getWindow().setStatusBarColor(modernBg);
-        getWindow().setNavigationBarColor(modernBg);
-        if (android.os.Build.VERSION.SDK_INT >= 23) {
-            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
-        }
+    @Override public void onCreate(Bundle b){ super.onCreate(b); getWindow().setStatusBarColor(bg2); getWindow().setNavigationBarColor(bg2); if(android.os.Build.VERSION.SDK_INT>=23)getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR); }
+    int dp(int v){return (int)(v*getResources().getDisplayMetrics().density+.5f);} 
+    GradientDrawable shape(int color,int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(radius));return g;}
+    GradientDrawable border(int color,int stroke,int radius){GradientDrawable g=shape(color,radius);g.setStroke(dp(1),stroke);return g;}
+
+    @Override TextView tv(String t,int sp,int c){TextView v=new TextView(this);v.setText(t);v.setTextSize(sp);v.setTextColor(c==Color.DKGRAY?muted:c);v.setPadding(dp(14),dp(6),dp(14),dp(6));if(sp>=18)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}
+    @Override Button btn(String t){Button b=new Button(this);b.setText(t);b.setAllCaps(false);b.setTextColor(Color.WHITE);b.setTextSize(14);b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);b.setMinHeight(dp(58));b.setElevation(dp(4));int c=blue2;String s=t.toLowerCase();if(s.contains("off")||s.contains("deslig")||s.contains("parar")||s.contains("limpar")||s.contains("descon"))c=red2;else if(s.contains("on")||s.contains("ligar")||s.contains("conectar")||s.contains("salvar")||s.contains("adicionar"))c=green2;else if(s.contains("recon")||s.contains("testar"))c=Color.rgb(95,75,230);b.setBackground(shape(c,18));return b;}
+    @Override TextView metric(String title){TextView v=tv(title+": --",16,navy);v.setBackground(border(Color.WHITE,Color.rgb(226,233,244),18));v.setElevation(dp(4));v.setGravity(Gravity.CENTER);v.setPadding(dp(10),dp(14),dp(10),dp(14));return v;}
+    @Override LinearLayout card(){LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setPadding(dp(16),dp(16),dp(16),dp(16));c.setBackground(border(Color.WHITE,Color.rgb(224,231,242),22));c.setElevation(dp(7));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(dp(12),dp(9),dp(12),dp(9));c.setLayoutParams(lp);return c;}
+    TextView pill(String text,int color){TextView v=tv(text,13,color);v.setGravity(Gravity.CENTER);v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);v.setBackground(shape(color==red2?Color.rgb(255,239,241):Color.rgb(232,248,240),999));return v;}
+    void two(LinearLayout p,View a,View b){LinearLayout r=new LinearLayout(this);r.setOrientation(LinearLayout.HORIZONTAL);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);lp.setMargins(dp(6),dp(6),dp(6),dp(6));r.addView(a,lp);r.addView(b,new LinearLayout.LayoutParams(0,-2,1));p.addView(r);} 
+
+    @Override void buildUi(){
+        ScrollView sv=new ScrollView(this);root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(bg2);root.setPadding(0,dp(10),0,dp(20));sv.addView(root);
+        LinearLayout topbar=new LinearLayout(this);topbar.setGravity(Gravity.CENTER);topbar.addView(tv("☰",28,navy),new LinearLayout.LayoutParams(0,-2,1));TextView logo=tv("⚡ BLUETTI",30,navy);logo.setGravity(Gravity.CENTER);topbar.addView(logo,new LinearLayout.LayoutParams(0,-2,3));TextView menu=tv("⋮",30,navy);menu.setGravity(Gravity.RIGHT);topbar.addView(menu,new LinearLayout.LayoutParams(0,-2,1));root.addView(topbar);
+
+        LinearLayout hero=card();hero.setOrientation(LinearLayout.HORIZONTAL);hero.setGravity(Gravity.CENTER_VERTICAL);TextView img=tv("▣",50,navy);img.setGravity(Gravity.CENTER);img.setBackground(shape(Color.rgb(236,241,248),18));hero.addView(img,new LinearLayout.LayoutParams(dp(94),dp(94)));
+        LinearLayout mid=new LinearLayout(this);mid.setOrientation(LinearLayout.VERTICAL);heroName=tv("BLUETTI",22,navy);status=pill("● Conectado",green2);deviceTitle=tv("Bluetooth: --",13,muted);mid.addView(heroName);mid.addView(status);mid.addView(deviceTitle);hero.addView(mid,new LinearLayout.LayoutParams(0,-2,1));
+        LinearLayout right=new LinearLayout(this);right.setOrientation(LinearLayout.VERTICAL);right.setGravity(Gravity.RIGHT);heroSoc=tv("--%",26,green2);heroSoc.setGravity(Gravity.RIGHT);heroTime=tv("--\nTempo restante",14,navy);heroTime.setGravity(Gravity.RIGHT);right.addView(heroSoc);right.addView(heroTime);hero.addView(right,new LinearLayout.LayoutParams(dp(120),-2));root.addView(hero);
+
+        LinearLayout stats=new LinearLayout(this);stats.setOrientation(LinearLayout.HORIZONTAL);stats.setPadding(dp(8),0,dp(8),0);statBattery=mini("🔋","--%","Bateria",green2);statInput=mini("🔌","-- W","Entrada",blue2);statOutput=mini("⚡","-- W","Saída",orange2);statTemp=mini("🌡","--","Status",Color.rgb(155,70,220));stats.addView(statBattery);stats.addView(statInput);stats.addView(statOutput);stats.addView(statTemp);root.addView(stats);
+        battery=statBattery;acIn=statInput;acOut=statOutput;dcOut=statTemp;dcIn=tv("Entrada DC: -- W",14,navy);acState=tv("AC --",14,navy);dcState=tv("DC --",14,navy);
+
+        LinearLayout gcard=card();LinearLayout gh=new LinearLayout(this);gh.setGravity(Gravity.CENTER_VERTICAL);gh.addView(tv("Bateria & Consumo",20,navy),new LinearLayout.LayoutParams(0,-2,1));Button config=btn("Configurar");Button stamp=btn("↻ 30s");gh.addView(config,new LinearLayout.LayoutParams(dp(130),dp(52)));gh.addView(stamp,new LinearLayout.LayoutParams(dp(92),dp(52)));gcard.addView(gh);TextView legend=tv("━ Bateria (%)      ━ Consumo (W)",13,muted);gcard.addView(legend);comboGraph=new CombinedGraph(this);gcard.addView(comboGraph,new LinearLayout.LayoutParams(-1,dp(310)));
+        LinearLayout footer=new LinearLayout(this);footer.setOrientation(LinearLayout.HORIZONTAL);graphFooterBattery=footerBox("Bateria Atual","--%",navy);graphFooterInput=footerBox("Entrada Total","-- W",blue2);graphFooterOutput=footerBox("Saída Total","-- W",orange2);footer.addView(graphFooterBattery);footer.addView(graphFooterInput);footer.addView(graphFooterOutput);gcard.addView(footer);graphStamp=tv("Atualizado há 30 segundos",12,muted);graphStamp.setGravity(Gravity.CENTER);gcard.addView(graphStamp);root.addView(gcard);
+        batteryGraph=new GraphView(this,"",100);batteryGraph.setVisibility(View.GONE);consumptionGraph=new GraphView(this,"",1000);consumptionGraph.setVisibility(View.GONE);showBatteryGraph=new CheckBox(this);showConsumptionGraph=new CheckBox(this);
+
+        LinearLayout ctrl=card();ctrl.addView(tv("Controle",20,navy));Button acOn=control("AC\nLIGAR",green2),acOff=control("AC\nDESLIGAR",red2),dcOn=control("DC\nLIGAR",green2),dcOff=control("DC\nDESLIGAR",red2);two(ctrl,acOn,acOff);two(ctrl,dcOn,dcOff);Button scan=btn("Buscar"),stop=btn("Parar"),connect=btn("Conectar"),disconnect=btn("Desconectar"),refresh=btn("Atualizar"),reconnect=btn("Reconectar");two(ctrl,scan,stop);two(ctrl,connect,disconnect);two(ctrl,refresh,reconnect);root.addView(ctrl);
+
+        LinearLayout dev=card();dev.addView(tv("Dispositivos",20,navy));manualName=new EditText(this);manualName.setHint("Nome da Bluetti");manualMac=new EditText(this);manualMac.setHint("MAC Bluetooth");dev.addView(manualName);dev.addView(manualMac);Button add=btn("Adicionar"),clear=btn("Limpar lista");two(dev,add,clear);savedBox=new LinearLayout(this);savedBox.setOrientation(LinearLayout.VERTICAL);dev.addView(savedBox);root.addView(dev);
+
+        LinearLayout auto=card();auto.addView(tv("Automações",20,navy));autoEnable=new CheckBox(this);autoEnable.setText("Ativar automação local");autoAc=new CheckBox(this);autoAc.setText("Automatizar AC");autoDc=new CheckBox(this);autoDc.setText("Automatizar DC");auto.addView(autoEnable);two(auto,autoAc,autoDc);lowPct=new EditText(this);lowPct.setHint("Desligar abaixo de %");lowPct.setInputType(2);highPct=new EditText(this);highPct.setHint("Ligar acima de %");highPct.setInputType(2);two(auto,lowPct,highPct);intervalSec=new EditText(this);intervalSec.setHint("Intervalo automação");intervalSec.setInputType(2);auto.addView(intervalSec);Button save=btn("Salvar"),test=btn("Testar agora");two(auto,save,test);automationStatus=tv("Automação: desligada",15,muted);auto.addView(automationStatus);root.addView(auto);
+        list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);root.addView(list);LinearLayout log=card();log.addView(tv("Log",18,navy));logBox=new LinearLayout(this);logBox.setOrientation(LinearLayout.VERTICAL);log.addView(logBox);root.addView(log);
+        scan.setOnClickListener(v->startScan());stop.setOnClickListener(v->stopScan());connect.setOnClickListener(v->connectSelected());disconnect.setOnClickListener(v->disconnect());refresh.setOnClickListener(v->readStatus());reconnect.setOnClickListener(v->{disconnect();handler.postDelayed(this::connectSelected,800);});acOn.setOnClickListener(v->writeRegister(3007,1));acOff.setOnClickListener(v->writeRegister(3007,0));dcOn.setOnClickListener(v->writeRegister(3008,1));dcOff.setOnClickListener(v->writeRegister(3008,0));add.setOnClickListener(v->addManualDevice());clear.setOnClickListener(v->{getSharedPreferences("devices",0).edit().clear().apply();renderSavedDevices();});save.setOnClickListener(v->{saveAutomation();applyAutomationState();});test.setOnClickListener(v->runAutomationCheck(true));setContentView(sv);
     }
+    TextView mini(String icon,String value,String label,int color){TextView v=tv(icon+"\n"+value+"\n"+label,14,color);v.setGravity(Gravity.CENTER);v.setBackground(border(Color.WHITE,Color.rgb(226,233,244),18));v.setElevation(dp(5));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(138),1);lp.setMargins(dp(5),dp(8),dp(5),dp(8));v.setLayoutParams(lp);return v;}
+    TextView footerBox(String label,String value,int color){TextView v=tv(label+"\n"+value,16,color);v.setGravity(Gravity.CENTER);v.setBackground(border(Color.WHITE,Color.rgb(226,233,244),12));return v;}
+    Button control(String text,int color){Button b=btn(text);b.setTextColor(color);b.setTextSize(16);b.setBackground(border(color==green2?Color.rgb(237,252,245):Color.rgb(255,241,243),color,18));return b;}
 
-    int dp2(int value) {
-        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
-    }
+    @Override void parseRead(byte[] pkt){int bc=pkt[2]&255,words=bc/2;int[] w=new int[words];for(int i=0;i<words;i++)w[i]=((pkt[3+i*2]&255)<<8)|(pkt[4+i*2]&255);runOnUiThread(()->{if(words==8){int dci=w[0],aci=w[1],aco=w[2],dco=w[3];lastSoc=w[7];lastConsumption=aco+dco;heroSoc.setText(lastSoc+"%");statBattery.setText("🔋\n"+lastSoc+"%\nBateria");statInput.setText("🔌\n"+aci+" W\nEntrada");statOutput.setText("⚡\n"+aco+" W\nSaída");statTemp.setText("🌡\n"+dco+" W\nDC");graphFooterBattery.setText("Bateria Atual\n"+lastSoc+"%");graphFooterInput.setText("Entrada Total\n"+aci+" W");graphFooterOutput.setText("Saída Total\n"+lastConsumption+" W");addHistory(comboBattery,lastSoc);addHistory(comboLoad,lastConsumption);long now=System.currentTimeMillis();if(now-lastGraphPaint>=30000||lastGraphPaint==0){lastGraphPaint=now;comboGraph.setData(comboBattery,comboLoad);graphStamp.setText("Atualizado há 30 segundos");}setStatus("Conectado",green);runAutomationCheck(false);}else if(words==2){acValue=w[0];dcValue=w[1];acState.setText("AC "+(acValue==1?"Ligado":"Desligado"));dcState.setText("DC "+(dcValue==1?"Ligado":"Desligado"));}});}
 
-    GradientDrawable shape(int color, int radiusDp) {
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(color);
-        g.setCornerRadius(dp2(radiusDp));
-        return g;
-    }
-
-    GradientDrawable strokeShape(int color, int strokeColor, int radiusDp) {
-        GradientDrawable g = shape(color, radiusDp);
-        g.setStroke(dp2(1), strokeColor);
-        return g;
-    }
-
-    @Override
-    TextView tv(String t, int sp, int c) {
-        TextView v = new TextView(this);
-        v.setText(t);
-        v.setTextSize(sp);
-        v.setTextColor(c == Color.DKGRAY ? modernMuted : c);
-        v.setPadding(dp2(18), dp2(8), dp2(18), dp2(8));
-        if (sp >= 22) v.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        return v;
-    }
-
-    @Override
-    Button btn(String t) {
-        Button b = new Button(this);
-        b.setText(t);
-        b.setAllCaps(false);
-        b.setTextColor(Color.WHITE);
-        b.setTextSize(14);
-        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        b.setMinHeight(dp2(58));
-        b.setPadding(dp2(10), dp2(10), dp2(10), dp2(10));
-        b.setElevation(dp2(4));
-
-        int color = modernBlue;
-        String label = t.toLowerCase();
-        if (label.contains("off") || label.contains("desconectar") || label.contains("limpar") || label.contains("parar")) {
-            color = Color.rgb(230, 56, 72);
-        } else if (label.contains("on") || label.contains("conectar") || label.contains("salvar") || label.contains("adicionar")) {
-            color = Color.rgb(0, 166, 97);
-        } else if (label.contains("reconectar") || label.contains("testar")) {
-            color = Color.rgb(92, 72, 230);
-        }
-        b.setBackground(shape(color, 18));
-        return b;
-    }
-
-    @Override
-    TextView metric(String title) {
-        TextView v = tv(title + ": --", 17, modernDark);
-        v.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        v.setBackground(strokeShape(Color.WHITE, Color.rgb(226, 233, 244), 18));
-        v.setElevation(dp2(3));
-        v.setPadding(dp2(18), dp2(16), dp2(18), dp2(16));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.setMargins(0, dp2(6), 0, dp2(6));
-        v.setLayoutParams(lp);
-        return v;
-    }
-
-    @Override
-    LinearLayout card() {
-        LinearLayout c = new LinearLayout(this);
-        c.setOrientation(LinearLayout.VERTICAL);
-        c.setPadding(dp2(16), dp2(16), dp2(16), dp2(16));
-        c.setBackground(strokeShape(Color.WHITE, Color.rgb(224, 231, 242), 24));
-        c.setElevation(dp2(6));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.setMargins(dp2(12), dp2(9), dp2(12), dp2(9));
-        c.setLayoutParams(lp);
-        return c;
-    }
+    public static class CombinedGraph extends View{Paint p=new Paint(1);ArrayList<Integer>b=new ArrayList<>(),l=new ArrayList<>();int max=2000;public CombinedGraph(android.content.Context c){super(c);}public void setData(ArrayList<Integer>bb,ArrayList<Integer>ll){b=new ArrayList<>(bb);l=new ArrayList<>(ll);for(int v:l)max=Math.max(max,v+200);invalidate();}protected void onDraw(Canvas c){int w=getWidth(),h=getHeight();c.drawColor(Color.WHITE);p.setStrokeWidth(2);p.setColor(Color.rgb(220,230,240));for(int i=1;i<5;i++){float y=i*h/5f;c.drawLine(70,y,w-70,y,p);}p.setTextSize(26);p.setColor(Color.rgb(75,85,100));c.drawText("100%",10,45,p);c.drawText(max+" W",w-100,45,p);draw(c,b,100,Color.rgb(35,43,55));draw(c,l,max,Color.rgb(235,45,55));}void draw(Canvas c,ArrayList<Integer>v,int m,int col){if(v.size()<2)return;float left=70,right=getWidth()-70,top=40,bot=getHeight()-45,step=(right-left)/(v.size()-1);p.setColor(col);p.setStrokeWidth(5);for(int i=1;i<v.size();i++){float x1=left+(i-1)*step,x2=left+i*step,y1=bot-Math.min(m,v.get(i-1))*(bot-top)/m,y2=bot-Math.min(m,v.get(i))*(bot-top)/m;c.drawLine(x1,y1,x2,y2,p);}}}
 }
