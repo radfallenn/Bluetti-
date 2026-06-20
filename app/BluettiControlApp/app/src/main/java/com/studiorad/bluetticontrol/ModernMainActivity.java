@@ -14,7 +14,7 @@ public class ModernMainActivity extends MainActivity {
     long lastGraphPaint=0;
     ArrayList<Integer> comboBattery=new ArrayList<>(), comboLoad=new ArrayList<>();
 
-    @Override public void onCreate(Bundle b){ super.onCreate(b); getWindow().setStatusBarColor(bg2); getWindow().setNavigationBarColor(bg2); if(android.os.Build.VERSION.SDK_INT>=23)getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR); }
+    @Override public void onCreate(Bundle b){ super.onCreate(b); getWindow().setStatusBarColor(bg2); getWindow().setNavigationBarColor(bg2); if(android.os.Build.VERSION.SDK_INT>=23)getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR); try{ if(android.os.Build.VERSION.SDK_INT>=26) startForegroundService(new android.content.Intent(this,BluettiPersistentService.class)); else startService(new android.content.Intent(this,BluettiPersistentService.class)); }catch(Exception e){} }
     int dp(int v){return (int)(v*getResources().getDisplayMetrics().density+.5f);} 
     GradientDrawable shape(int color,int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(radius));return g;}
     GradientDrawable border(int color,int stroke,int radius){GradientDrawable g=shape(color,radius);g.setStroke(dp(1),stroke);return g;}
