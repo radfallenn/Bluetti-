@@ -1,0 +1,31 @@
+name: Build Bluetti APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'app/BluettiControlApp/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/BluettiControlApp
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build debug APK
+        run: gradle :app:assembleDebug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BluettiControl-debug-apk
+          path: app/BluettiControlApp/app/build/outputs/apk/debug/*.apk
