@@ -5,9 +5,13 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
 
     <application android:theme="@style/AppTheme" android:label="Bluetti Control" android:allowBackup="true" android:usesCleartextTraffic="true">
+        <service android:name=".BluettiPersistentService" android:enabled="true" android:exported="false" android:foregroundServiceType="connectedDevice" />
         <activity android:name=".AutoRefreshModernMainActivity" android:screenOrientation="portrait" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
