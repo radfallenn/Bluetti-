@@ -1,0 +1,29 @@
+bridge:
+  host: "0.0.0.0"
+  port: 5055
+  read_interval_seconds: 5
+  reconnect_interval_seconds: 10
+  history_max_points: 720
+
+mqtt:
+  enabled: true
+  host: "127.0.0.1"
+  port: 1883
+  username: ""
+  password: ""
+  base_topic: "bluetti"
+
+automation:
+  enabled: false
+  ac_off_below: 20
+  ac_on_above: 80
+  dc_off_below: 15
+  dc_on_above: 75
+  cooldown_seconds: 60
+
+devices:
+  - id: "ac180p"
+    name: "Bluetti AC180P"
+    mac: "C7:A3:2B:21:77:90"
+    model: "AC180P"
+    enabled: true
