@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bluetti Bridge</title>
+  <style>
+    :root{--bg:#eef2f7;--card:#fff;--text:#111827;--muted:#64748b;--green:#00b15d;--blue:#4d8efe;--orange:#f59e0b;--red:#e11d48;--border:#dce3ec}
+    *{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--text);padding:18px}.wrap{max-width:920px;margin:auto}.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}.brand{font-size:28px;font-weight:900;letter-spacing:2px;color:#123456}.pill{border-radius:999px;padding:8px 14px;background:#ddf8ea;color:var(--green);font-weight:800}.card{background:var(--card);border:1px solid var(--border);border-radius:28px;padding:20px;margin:14px 0;box-shadow:0 18px 35px rgba(15,23,42,.08)}.hero{display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center}.name{font-size:24px;font-weight:900}.muted{color:var(--muted)}.soc{font-size:46px;font-weight:900;color:var(--green);text-align:right}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.metric{border:1px solid var(--border);border-radius:24px;padding:18px;background:#fff;box-shadow:0 8px 20px rgba(15,23,42,.05)}.metric .v{font-size:28px;font-weight:900;margin-top:8px}.controls{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}button{border:0;border-radius:22px;padding:18px;font-size:16px;font-weight:900;cursor:pointer}.on{background:#ddf8ea;color:var(--green);border:1px solid var(--green)}.off{background:#ffe2e2;color:var(--red);border:1px solid var(--red)}.blue{background:var(--blue);color:white}.log{white-space:pre-wrap;font-family:monospace;font-size:12px;max-height:180px;overflow:auto}@media(max-width:640px){.grid,.controls{grid-template-columns:1fr}.hero{grid-template-columns:1fr}.soc{text-align:left}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><div class="brand">BLUETTI BRIDGE</div><div id="online" class="pill">Conectando</div></div>
+  <div id="devices"></div>
+</div>
+<script>
+const devicesBox=document.getElementById('devices');
+const online=document.getElementById('online');
+function cmd(id,path){fetch(`/api/devices/${id}/${path}`,{method:'POST'}).catch(console.error)}
+function render(data){
+  const devs=data.devices||{};online.textContent='Online';
+  devicesBox.innerHTML=Object.values(devs).map(d=>`
+    <section class="card">
+      <div class="hero">
+        <div><div class="name">${d.name||d.id}</div><div class="muted">${d.model||''} • ${d.mac||''}</div><div class="pill" style="display:inline-block;margin-top:10px;color:${d.online?'#00b15d':'#e11d48'};background:${d.online?'#ddf8ea':'#ffe2e2'}">${d.online?'Conectado':'Desconectado'}</div></div>
+        <div class="soc">${d.battery??'--'}%</div>
+      </div>
+    </section>
+    <section class="card grid">
+      <div class="metric"><div class="muted">Bateria</div><div class="v" style="color:var(--green)">${d.battery??'--'}%</div></div>
+      <div class="metric"><div class="muted">Entrada Total</div><div class="v" style="color:var(--blue)">${d.input_total_w??0} W</div></div>
+      <div class="metric"><div class="muted">Saída Total</div><div class="v" style="color:var(--orange)">${d.output_total_w??0} W</div></div>
+      <div class="metric"><div class="muted">DC</div><div class="v">${d.dc_enabled===null?'--':d.dc_enabled?'ON':'OFF'}</div></div>
+    </section>
+    <section class="card controls">
+      <button class="on" onclick="cmd('${d.id}','ac/on')">AC LIGAR</button>
+      <button class="off" onclick="cmd('${d.id}','ac/off')">AC DESLIGAR</button>
+      <button class="on" onclick="cmd('${d.id}','dc/on')">DC LIGAR</button>
+      <button class="off" onclick="cmd('${d.id}','dc/off')">DC DESLIGAR</button>
+      <button class="blue" onclick="cmd('${d.id}','read')">ATUALIZAR</button>
+    </section>
+    <section class="card"><b>Diagnóstico</b><div class="log">TX: ${d.last_tx_hex||''}\nRX: ${d.last_rx_hex||''}\nErro/UUIDs: ${d.last_error||''}</div></section>
+  `).join('') || '<section class="card">Nenhum dispositivo configurado.</section>';
+}
+fetch('/api/status').then(r=>r.json()).then(render);
+const ws=new WebSocket(`ws://${location.host}/ws`);ws.onmessage=e=>render(JSON.parse(e.data));ws.onopen=()=>online.textContent='Online';ws.onclose=()=>online.textContent='Offline';
+</script>
+</body>
+</html>
