@@ -1,0 +1,13 @@
+services:
+  bluetti-bridge:
+    build: .
+    container_name: bluetti-bridge
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./data:/app/data
+      - /var/run/dbus:/var/run/dbus
+    environment:
+      - TZ=America/Sao_Paulo
