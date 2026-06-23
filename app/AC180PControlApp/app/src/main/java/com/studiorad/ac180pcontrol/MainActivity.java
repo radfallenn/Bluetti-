@@ -24,7 +24,12 @@ public class MainActivity extends Activity {
     static final UUID CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
 
     final Handler handler = new Handler(Looper.getMainLooper());
-    BluetoothAdapter adapter; BluetoothLeScanner scanner; BluetoothGatt gatt; BluetoothGattCharacteristic notifyChar, writeChar, ff03Char, ff04Char; ScanCallback scanCallback;
+    BluetoothAdapter adapter;
+    BluetoothLeScanner scanner;
+    BluetoothDevice selected;
+    BluetoothGatt gatt;
+    BluetoothGattCharacteristic notifyChar, writeChar, ff03Char, ff04Char;
+    ScanCallback scanCallback;
     int rxCount=0, txCount=0; String lastRx="--", lastTx="--", lastAction="START"; final ArrayList<String> captures = new ArrayList<>();
 
     LinearLayout root; TextView status, device, battery, input, output, acState, dcState, rxInfo, rxBox, logBox;
@@ -84,7 +89,7 @@ public class MainActivity extends Activity {
     void writeTo(BluetoothGattCharacteristic c,byte[] data,String label){ if(gatt==null||c==null){log(label+": canal nulo");return;} try{txCount++;lastTx=hex(data);c.setValue(data);gatt.writeCharacteristic(c);rx("TX #"+txCount+" "+label+"\n"+lastTx);log("TX "+label+": "+lastTx);}catch(Exception e){log("Erro TX "+label+": "+e.getMessage());}}
 
     void handleRx(byte[] data){ if(data==null||data.length==0)return; rxCount++; lastRx=hex(data); long ts=System.currentTimeMillis(); String type=(data.length>=2&&(data[0]&255)==0x2A&&(data[1]&255)==0x2A)?"AC180P_2A2A":"RAW"; String json="{\"t\":"+ts+",\"type\":\""+type+"\",\"action\":\""+lastAction+"\",\"len\":"+data.length+",\"hex\":\""+lastRx.replace(" ","")+"\"}"; captures.add(0,json); while(captures.size()>160)captures.remove(captures.size()-1); rx("RX #"+rxCount+" "+type+" len="+data.length+" action="+lastAction+"\n"+lastRx+"\nJSON: "+json); log("RX "+lastRx); updateRxInfo(); parseEngineering(data); }
-    void parseEngineering(byte[] d){ if(d.length==10&&(d[0]&255)==0x2A&&(d[1]&255)==0x2A){ int b2=d[2]&255,b3=d[3]&255,b4=d[4]&255,b5=d[5]&255,b6=d[6]&255,b7=d[7]&255,b8=d[8]&255,b9=d[9]&255; battery.setText("▰ Bateria\nAguardando mapa"); input.setText("↯ Entrada\n2A pkt"); output.setText("⚡ Saída\n"+String.format(Locale.ROOT,"%02X%02X",b4,b5)); acState.setText("AC\n"+String.format(Locale.ROOT,"%02X %02X",b6,b7)); dcState.setText("DC\n"+String.format(Locale.ROOT,"%02X %02X",b8,b9)); }}
+    void parseEngineering(byte[] d){ if(d.length==10&&(d[0]&255)==0x2A&&(d[1]&255)==0x2A){ int b4=d[4]&255,b5=d[5]&255,b6=d[6]&255,b7=d[7]&255,b8=d[8]&255,b9=d[9]&255; battery.setText("▰ Bateria\nAguardando mapa"); input.setText("↯ Entrada\n2A pkt"); output.setText("⚡ Saída\n"+String.format(Locale.ROOT,"%02X%02X",b4,b5)); acState.setText("AC\n"+String.format(Locale.ROOT,"%02X %02X",b6,b7)); dcState.setText("DC\n"+String.format(Locale.ROOT,"%02X %02X",b8,b9)); }}
 
     String hex(byte[] b){StringBuilder sb=new StringBuilder();for(byte x:b)sb.append(String.format(Locale.ROOT,"%02X ",x));return sb.toString().trim();}
 }
