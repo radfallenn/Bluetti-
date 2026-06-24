@@ -12,41 +12,41 @@ public class ModernMainActivity extends MainActivity {
     int bg2=Color.rgb(234,240,247), cardBg=Color.rgb(238,244,250), cardBg2=Color.rgb(241,246,251), navy=Color.rgb(16,28,45), muted=Color.rgb(134,148,164);
     int green2=Color.rgb(0,150,92), blue2=Color.rgb(47,121,201), red2=Color.rgb(201,42,70), orange2=Color.rgb(220,145,22), violet2=Color.rgb(125,80,170);
     TextView heroName, heroSoc, heroTime, statBattery, statInput, statOutput, statDc;
-    int cardRadius=34, cardSpacing=8, cardMinHeight=112;
+    int cardRadius=34, cardSpacing=8, cardMinHeight=104;
 
     @Override public void onCreate(Bundle b){ super.onCreate(b); getWindow().setStatusBarColor(bg2); getWindow().setNavigationBarColor(bg2); if(android.os.Build.VERSION.SDK_INT>=23)getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR); try{ if(android.os.Build.VERSION.SDK_INT>=26) startForegroundService(new android.content.Intent(this,BluettiPersistentService.class)); else startService(new android.content.Intent(this,BluettiPersistentService.class)); }catch(Exception e){} }
     int dp(int v){return (int)(v*getResources().getDisplayMetrics().density+.5f);} 
 
     android.graphics.drawable.Drawable sunkenFrame(int fill,int radius){
-        GradientDrawable dark=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{Color.rgb(152,168,184),Color.rgb(224,233,242),Color.WHITE}); dark.setCornerRadius(dp(radius));
-        GradientDrawable light=new GradientDrawable(GradientDrawable.Orientation.BR_TL,new int[]{Color.WHITE,Color.rgb(240,246,251),Color.rgb(174,188,202)}); light.setCornerRadius(dp(radius-2));
-        GradientDrawable inner=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{fill,Color.rgb(249,252,255),Color.rgb(226,235,244)}); inner.setCornerRadius(dp(radius-5));
+        GradientDrawable dark=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{Color.rgb(165,181,196),Color.rgb(232,240,247),Color.WHITE}); dark.setCornerRadius(dp(radius));
+        GradientDrawable light=new GradientDrawable(GradientDrawable.Orientation.BR_TL,new int[]{Color.WHITE,Color.rgb(244,248,252),Color.rgb(190,203,216)}); light.setCornerRadius(dp(radius-2));
+        GradientDrawable inner=new GradientDrawable(GradientDrawable.Orientation.TL_BR,new int[]{fill,Color.rgb(249,252,255),Color.rgb(231,239,246)}); inner.setCornerRadius(dp(radius-5));
         LayerDrawable layer=new LayerDrawable(new android.graphics.drawable.Drawable[]{dark,light,inner});
-        layer.setLayerInset(1,dp(5),dp(5),dp(5),dp(5));
-        layer.setLayerInset(2,dp(11),dp(11),dp(11),dp(11));
+        layer.setLayerInset(1,dp(4),dp(4),dp(4),dp(4));
+        layer.setLayerInset(2,dp(9),dp(9),dp(9),dp(9));
         return layer;
     }
     android.graphics.drawable.Drawable insetField(){
-        GradientDrawable rim=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{Color.rgb(165,181,196),Color.rgb(230,238,246),Color.WHITE}); rim.setCornerRadius(dp(24));
-        GradientDrawable face=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{Color.rgb(218,229,239),Color.rgb(252,254,255),Color.rgb(236,243,249)}); face.setCornerRadius(dp(22));
+        GradientDrawable rim=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{Color.rgb(178,194,207),Color.rgb(232,240,247),Color.WHITE}); rim.setCornerRadius(dp(28));
+        GradientDrawable face=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{Color.rgb(225,235,244),Color.rgb(252,254,255),Color.rgb(239,245,250)}); face.setCornerRadius(dp(26));
         LayerDrawable layer=new LayerDrawable(new android.graphics.drawable.Drawable[]{rim,face});
-        layer.setLayerInset(1,dp(3),dp(7),dp(3),dp(4));
+        layer.setLayerInset(1,dp(3),dp(6),dp(3),dp(3));
         return layer;
     }
     android.graphics.drawable.Drawable softButton(){
-        GradientDrawable rim=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{Color.rgb(160,176,191),Color.rgb(225,235,244),Color.WHITE}); rim.setCornerRadius(dp(28));
-        GradientDrawable face=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{Color.rgb(226,236,245),Color.WHITE,Color.rgb(235,243,250)}); face.setCornerRadius(dp(25));
+        GradientDrawable rim=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{Color.rgb(183,197,210),Color.rgb(236,243,249),Color.WHITE}); rim.setCornerRadius(dp(27));
+        GradientDrawable face=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{Color.rgb(232,241,249),Color.WHITE,Color.rgb(239,246,251)}); face.setCornerRadius(dp(25));
         LayerDrawable layer=new LayerDrawable(new android.graphics.drawable.Drawable[]{rim,face});
-        layer.setLayerInset(1,dp(4),dp(8),dp(4),dp(5));
+        layer.setLayerInset(1,dp(3),dp(5),dp(3),dp(4));
         return layer;
     }
 
     @Override TextView tv(String t,int sp,int c){TextView v=new TextView(this);v.setText(t);v.setTextSize(sp);v.setTextColor(c==Color.DKGRAY?muted:c);v.setPadding(dp(14),dp(6),dp(14),dp(6));if(sp>=18)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);v.setSingleLine(false);return v;}
-    @Override Button btn(String t){Button b=new Button(this);b.setText(t);b.setAllCaps(false);b.setTextColor(navy);b.setTextSize(14);b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);b.setMinHeight(dp(64));b.setGravity(Gravity.CENTER);b.setElevation(dp(12));b.setBackground(softButton());b.setPadding(dp(12),dp(8),dp(12),dp(8));return b;}
-    @Override TextView metric(String title){TextView v=tv(title+": --",16,navy);v.setBackground(insetField());v.setElevation(dp(4));v.setGravity(Gravity.CENTER_VERTICAL);v.setPadding(dp(20),dp(16),dp(20),dp(16));v.setMinHeight(dp(cardMinHeight));return v;}
-    @Override LinearLayout card(){LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setPadding(dp(24),dp(24),dp(24),dp(24));c.setBackground(sunkenFrame(cardBg,cardRadius));c.setElevation(dp(18));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(dp(16),dp(12),dp(16),dp(12));c.setLayoutParams(lp);return c;}
-    TextView pill(String text,int color){TextView v=tv(text,12,color);v.setGravity(Gravity.CENTER);v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);v.setBackground(insetField());v.setPadding(dp(14),dp(8),dp(14),dp(8));return v;}
-    void styleInput(EditText e){e.setTextColor(navy);e.setHintTextColor(muted);e.setTextSize(18);e.setSingleLine(true);e.setMinHeight(dp(66));e.setPadding(dp(20),0,dp(16),0);e.setGravity(Gravity.CENTER_VERTICAL);e.setBackground(insetField());}
+    @Override Button btn(String t){Button b=new Button(this);b.setText(t);b.setAllCaps(false);b.setTextColor(navy);b.setTextSize(13);b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);b.setMinHeight(dp(52));b.setGravity(Gravity.CENTER);b.setElevation(dp(6));b.setBackground(softButton());b.setPadding(dp(10),dp(4),dp(10),dp(4));return b;}
+    @Override TextView metric(String title){TextView v=tv(title+": --",15,navy);v.setBackground(insetField());v.setElevation(dp(3));v.setGravity(Gravity.CENTER_VERTICAL);v.setPadding(dp(18),dp(14),dp(18),dp(14));v.setMinHeight(dp(cardMinHeight));return v;}
+    @Override LinearLayout card(){LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setPadding(dp(22),dp(22),dp(22),dp(22));c.setBackground(sunkenFrame(cardBg,cardRadius));c.setElevation(dp(10));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(dp(16),dp(12),dp(16),dp(12));c.setLayoutParams(lp);return c;}
+    TextView pill(String text,int color){TextView v=tv(text,12,color);v.setGravity(Gravity.CENTER);v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);v.setBackground(insetField());v.setPadding(dp(14),dp(7),dp(14),dp(7));return v;}
+    void styleInput(EditText e){e.setTextColor(navy);e.setHintTextColor(muted);e.setTextSize(18);e.setSingleLine(true);e.setMinHeight(dp(58));e.setPadding(dp(20),0,dp(16),0);e.setGravity(Gravity.CENTER_VERTICAL);e.setBackground(insetField());}
     void two(LinearLayout p,View a,View b){LinearLayout r=new LinearLayout(this);r.setOrientation(LinearLayout.HORIZONTAL);LinearLayout.LayoutParams lp1=new LinearLayout.LayoutParams(0,-2,1);lp1.setMargins(dp(cardSpacing),dp(cardSpacing),dp(cardSpacing),dp(cardSpacing));LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1);lp2.setMargins(dp(cardSpacing),dp(cardSpacing),dp(cardSpacing),dp(cardSpacing));r.addView(a,lp1);r.addView(b,lp2);p.addView(r);} 
     void gridAdd(LinearLayout p, View... views){LinearLayout row=null;for(int i=0;i<views.length;i++){if(i%2==0){row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);p.addView(row);}LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);lp.setMargins(dp(cardSpacing),dp(cardSpacing),dp(cardSpacing),dp(cardSpacing));row.addView(views[i],lp);} }
 
@@ -72,8 +72,8 @@ public class ModernMainActivity extends MainActivity {
         list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);root.addView(list);LinearLayout log=card();log.addView(tv("LOG",12,muted));logBox=new LinearLayout(this);logBox.setOrientation(LinearLayout.VERTICAL);log.addView(logBox);root.addView(log);
         scan.setOnClickListener(v->startScan());stop.setOnClickListener(v->stopScan());connect.setOnClickListener(v->connectSelected());disconnect.setOnClickListener(v->disconnect());refresh.setOnClickListener(v->readStatus());reconnect.setOnClickListener(v->{disconnect();handler.postDelayed(this::connectSelected,800);});acOn.setOnClickListener(v->writeRegister(3007,1));acOff.setOnClickListener(v->writeRegister(3007,0));dcOn.setOnClickListener(v->writeRegister(3008,1));dcOff.setOnClickListener(v->writeRegister(3008,0));add.setOnClickListener(v->addManualDevice());clear.setOnClickListener(v->{getSharedPreferences("devices",0).edit().clear().apply();renderSavedDevices();});save.setOnClickListener(v->{saveAutomation();applyAutomationState();});test.setOnClickListener(v->runAutomationCheck(true));setContentView(sv);
     }
-    TextView stat(String icon,String label,String value,int color){TextView v=tv(icon+"  "+label+"\n"+value,18,color);v.setGravity(Gravity.CENTER_VERTICAL);v.setBackground(insetField());v.setElevation(dp(5));v.setPadding(dp(20),dp(16),dp(20),dp(16));v.setMinHeight(dp(cardMinHeight));if(label.equals("Bateria"))statBattery=v;else if(label.equals("Entrada"))statInput=v;else if(label.equals("Saída"))statOutput=v;else statDc=v;return v;}
-    Button control(String text,int color){Button b=btn(text);b.setTextColor(color);b.setTextSize(17);b.setMinHeight(dp(88));b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);b.setBackground(softButton());return b;}
+    TextView stat(String icon,String label,String value,int color){TextView v=tv(icon+"  "+label+"\n"+value,17,color);v.setGravity(Gravity.CENTER_VERTICAL);v.setBackground(insetField());v.setElevation(dp(3));v.setPadding(dp(18),dp(14),dp(18),dp(14));v.setMinHeight(dp(cardMinHeight));if(label.equals("Bateria"))statBattery=v;else if(label.equals("Entrada"))statInput=v;else if(label.equals("Saída"))statOutput=v;else statDc=v;return v;}
+    Button control(String text,int color){Button b=btn(text);b.setTextColor(color);b.setTextSize(15);b.setMinHeight(dp(68));b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);b.setBackground(softButton());return b;}
 
     @Override void parseRead(byte[] pkt){try{if(pkt==null||pkt.length<5)return;int bc=pkt[2]&255,words=bc/2;if(words<2)return;int[] w=new int[words];for(int i=0;i<words&&4+i*2<pkt.length;i++)w[i]=((pkt[3+i*2]&255)<<8)|(pkt[4+i*2]&255);runOnUiThread(()->{if(words>=8){int dci=w[0],aci=w[1],aco=w[2],dco=w[3];lastSoc=w[7];lastConsumption=aco+dco;int inputTotal=aci+dci;heroSoc.setText(lastSoc+"%");statBattery.setText("▰  Bateria\n"+lastSoc+"%");statInput.setText("↯  Entrada\n"+inputTotal+" W");statOutput.setText("⚡  Saída\n"+lastConsumption+" W");statDc.setText("⏻  DC\n"+dco+" W");heroTime.setText((lastConsumption>0?formatMinutes((1152*lastSoc/100*60)/Math.max(1,lastConsumption)):"Sem consumo")+"\nTempo restante");setStatus("Conectado",green);runAutomationCheck(false);}else if(words==2){acValue=w[0];dcValue=w[1];}});}catch(Exception e){log("Parser seguro: "+e.getMessage());}}
     String formatMinutes(int min){if(min<=0)return "--";return (min/60)+"h "+(min%60)+"m";}
