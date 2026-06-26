@@ -5,13 +5,125 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.*;
 import android.widget.*;
+import java.util.*;
 
 public class ModernMainActivity extends MainActivity {
     int bg = Color.rgb(238,242,247), white = Color.WHITE, text = Color.rgb(26,28,30), muted = Color.rgb(100,116,139);
     int green = Color.rgb(0,177,93), greenDark = Color.rgb(0,109,55), blue = Color.rgb(47,121,201), orange = Color.rgb(245,158,11), purple = Color.rgb(155,81,224), red = Color.rgb(225,29,72);
     TextView heroName, heroSoc, heroTime, statBattery, statInput, statOutput, statDc;
 
-    @Override public void onCreate(Bundle b){ super.onCreate(b); getWindow().setStatusBarColor(Color.rgb(244,252,241)); getWindow().setNavigationBarColor(Color.rgb(232,240,229)); if(android.os.Build.VERSION.SDK_INT>=23)getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR); try{ if(android.os.Build.VERSION.SDK_INT>=26) startForegroundService(new android.content.Intent(this,BluettiPersistentService.class)); else startService(new android.content.Intent(this,BluettiPersistentService.class)); }catch(Exception e){} }
+    @Override public void onCreate(Bundle b){
+        super.onCreate(b);
+        getWindow().setStatusBarColor(Color.rgb(244,252,241));
+        getWindow().setNavigationBarColor(Color.rgb(232,240,229));
+        if(android.os.Build.VERSION.SDK_INT>=23)getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        startPersistentService();
+        requestBackgroundUsePermissions();
+        handler.postDelayed(this::autoConnectSavedDevice, 1200);
+    }
+
+    @Override void requestBlePermissions(){
+        ArrayList<String> perms = new ArrayList<>();
+        if(android.os.Build.VERSION.SDK_INT>=31){
+            perms.add(android.Manifest.permission.BLUETOOTH_SCAN);
+            perms.add(android.Manifest.permission.BLUETOOTH_CONNECT);
+        } else {
+            perms.add(android.Manifest.permission.ACCESS_FINE_LOCATION);
+        }
+        if(android.os.Build.VERSION.SDK_INT>=33) perms.add(android.Manifest.permission.POST_NOTIFICATIONS);
+        try{ requestPermissions(perms.toArray(new String[0]),10); }catch(Exception ignored){}
+    }
+
+    void requestBackgroundUsePermissions(){
+        try{
+            if(android.os.Build.VERSION.SDK_INT>=23){
+                android.os.PowerManager pm=(android.os.PowerManager)getSystemService(POWER_SERVICE);
+                if(pm!=null && !pm.isIgnoringBatteryOptimizations(getPackageName())){
+                    android.content.Intent i=new android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                    i.setData(android.net.Uri.parse("package:"+getPackageName()));
+                    startActivity(i);
+                }
+            }
+        }catch(Exception ignored){}
+    }
+
+    void startPersistentService(){
+        try{
+            android.content.Intent svc=new android.content.Intent(this,BluettiPersistentService.class);
+            if(android.os.Build.VERSION.SDK_INT>=26) startForegroundService(svc); else startService(svc);
+        }catch(Exception ignored){}
+    }
+
+    void saveAsLastDevice(String mac,String name){
+        if(mac==null || mac.trim().length()<17)return;
+        if(name==null || name.trim().isEmpty())name="Bluetti";
+        getSharedPreferences("last_device",0).edit().putString("mac",mac).putString("name",name).apply();
+        getSharedPreferences("devices",0).edit().putString(mac,name).apply();
+        startPersistentService();
+    }
+
+    void autoConnectSavedDevice(){
+        try{
+            if(bt==null)return;
+            String mac=getSharedPreferences("last_device",0).getString("mac","");
+            String name=getSharedPreferences("last_device",0).getString("name","Bluetti");
+            if(mac==null || mac.length()<17)return;
+            selected=bt.getRemoteDevice(mac);
+            selectedName=name;
+            if(deviceTitle!=null)deviceTitle.setText("Dispositivo: "+name+" • "+mac);
+            setStatus("Conectando dispositivo salvo", blue);
+            connectSelected();
+        }catch(Exception e){ log("Auto conectar: "+e.getMessage()); }
+    }
+
+    @Override void addManualDevice(){
+        String n=manualName.getText().toString().trim();
+        String m=manualMac.getText().toString().trim().toUpperCase(Locale.ROOT);
+        if(n.isEmpty()) n="Bluetti";
+        if(!m.matches("([0-9A-F]{2}:){5}[0-9A-F]{2}")){ log("MAC inválido"); return; }
+        saveAsLastDevice(m,n);
+        manualName.setText(""); manualMac.setText(""); renderSavedDevices();
+        try{ selected=bt.getRemoteDevice(m); selectedName=n; deviceTitle.setText("Dispositivo: "+n+" • "+m); connectSelected(); }catch(Exception ignored){}
+    }
+
+    @Override void saveFoundDevice(String name,String mac){
+        if(mac==null||mac.isEmpty())return;
+        if(name==null||name.isEmpty()) name="Bluetti";
+        saveAsLastDevice(mac,name);
+        renderSavedDevices();
+    }
+
+    @Override void renderSavedDevices(){
+        if(savedBox==null)return;
+        savedBox.removeAllViews();
+        Map<String,?> all=getSharedPreferences("devices",0).getAll();
+        if(all.isEmpty()){ savedBox.addView(tv("Nenhuma Bluetti salva ainda.",13,Color.DKGRAY)); return; }
+        for(String mac: all.keySet()){
+            String name=String.valueOf(all.get(mac));
+            LinearLayout c=card();
+            c.addView(tv(name,17,text));
+            c.addView(tv(mac,13,muted));
+            Button b=btn("Usar esta Bluetti");
+            c.addView(b); savedBox.addView(c);
+            b.setOnClickListener(v->{
+                try{
+                    saveAsLastDevice(mac,name);
+                    selected=bt.getRemoteDevice(mac); selectedName=name;
+                    deviceTitle.setText("Dispositivo: "+name+" • "+mac);
+                    connectSelected();
+                }catch(Exception e){ log("Erro ao usar Bluetti salva: "+e.getMessage()); }
+            });
+        }
+    }
+
+    @Override void connectSelected(){
+        if(selected!=null){
+            try{ saveAsLastDevice(selected.getAddress(), selectedName==null||selectedName.isEmpty()?selected.getAddress():selectedName); }catch(Exception ignored){}
+        }
+        startPersistentService();
+        super.connectSelected();
+    }
+
     int dp(int v){return (int)(v*getResources().getDisplayMetrics().density+.5f);} 
     GradientDrawable bgRound(int color, int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(radius));return g;}
     GradientDrawable bgStroke(int color, int radius, int strokeColor){GradientDrawable g=bgRound(color,radius);g.setStroke(dp(1),strokeColor);return g;}
@@ -49,7 +161,7 @@ public class ModernMainActivity extends MainActivity {
         LinearLayout conn=card();conn.addView(tv("Conexão",20,text));Button scan=btn("Buscar"),stop=btn("Parar"),connect=btn("Conectar"),disconnect=btn("Desconectar"),refresh=btn("Atualizar"),reconnect=btn("Reconectar");gridAdd(conn,scan,stop,connect,disconnect,refresh,reconnect);root.addView(conn);
         list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);root.addView(list);LinearLayout log=card();log.addView(tv("Registros de Atividade",20,text));logBox=new LinearLayout(this);logBox.setOrientation(LinearLayout.VERTICAL);log.addView(logBox);root.addView(log);
 
-        scan.setOnClickListener(v->startScan());stop.setOnClickListener(v->stopScan());connect.setOnClickListener(v->connectSelected());disconnect.setOnClickListener(v->disconnect());refresh.setOnClickListener(v->readStatus());reconnect.setOnClickListener(v->{disconnect();handler.postDelayed(this::connectSelected,800);});acOn.setOnClickListener(v->writeRegister(3007,1));acOff.setOnClickListener(v->writeRegister(3007,0));dcOn.setOnClickListener(v->writeRegister(3008,1));dcOff.setOnClickListener(v->writeRegister(3008,0));add.setOnClickListener(v->addManualDevice());clear.setOnClickListener(v->{getSharedPreferences("devices",0).edit().clear().apply();renderSavedDevices();});save.setOnClickListener(v->{saveAutomation();applyAutomationState();});test.setOnClickListener(v->runAutomationCheck(true));setContentView(sv);
+        scan.setOnClickListener(v->startScan());stop.setOnClickListener(v->stopScan());connect.setOnClickListener(v->autoConnectSavedDevice());disconnect.setOnClickListener(v->disconnect());refresh.setOnClickListener(v->readStatus());reconnect.setOnClickListener(v->{disconnect();handler.postDelayed(this::autoConnectSavedDevice,800);});acOn.setOnClickListener(v->writeRegister(3007,1));acOff.setOnClickListener(v->writeRegister(3007,0));dcOn.setOnClickListener(v->writeRegister(3008,1));dcOff.setOnClickListener(v->writeRegister(3008,0));add.setOnClickListener(v->addManualDevice());clear.setOnClickListener(v->{getSharedPreferences("devices",0).edit().clear().apply();getSharedPreferences("last_device",0).edit().clear().apply();renderSavedDevices();});save.setOnClickListener(v->{saveAutomation();applyAutomationState();});test.setOnClickListener(v->runAutomationCheck(true));setContentView(sv);
     }
 
     TextView stat(String icon,String label,String value,int color){TextView v=tv(icon+"  "+label.toUpperCase()+"\n"+value,18,color);v.setBackground(bgStroke(white,24,Color.rgb(220,227,236)));v.setElevation(dp(5));v.setGravity(Gravity.CENTER_VERTICAL);v.setPadding(dp(16),dp(14),dp(16),dp(14));v.setMinHeight(dp(96));if(label.equals("Bateria"))statBattery=v;else if(label.equals("Entrada"))statInput=v;else if(label.equals("Saída"))statOutput=v;else statDc=v;return v;}
