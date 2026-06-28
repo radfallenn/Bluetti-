@@ -4,10 +4,11 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bluetooth \
     bluez \
     dbus \
     libglib2.0-0 \
+    rfkill \
+    iproute2 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
