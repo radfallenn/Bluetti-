@@ -10,7 +10,9 @@ import java.util.*;
 public class ModernMainActivity extends MainActivity {
     int bg = Color.rgb(238,242,247), white = Color.WHITE, text = Color.rgb(26,28,30), muted = Color.rgb(100,116,139);
     int green = Color.rgb(0,177,93), greenDark = Color.rgb(0,109,55), blue = Color.rgb(47,121,201), orange = Color.rgb(245,158,11), purple = Color.rgb(155,81,224), red = Color.rgb(225,29,72);
-    TextView heroName, heroSoc, heroTime, statBattery, statInput, statOutput, statDc;
+    TextView heroName, heroSoc, heroTime, statBattery, statInput, statOutput, statDc, bridgeStatus;
+    EditText bridgeUrlInput;
+    final Runnable bridgeLoop = new Runnable(){ public void run(){ checkBridgeStatus(); handler.postDelayed(this, 60000); } };
 
     @Override public void onCreate(Bundle b){
         super.onCreate(b);
@@ -19,121 +21,53 @@ public class ModernMainActivity extends MainActivity {
         if(android.os.Build.VERSION.SDK_INT>=23)getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         startPersistentService();
         requestBackgroundUsePermissions();
-        handler.postDelayed(this::autoConnectSavedDevice, 1200);
+        handler.postDelayed(this::autoConnectSavedDevice,1200);
+        handler.postDelayed(bridgeLoop,1800);
     }
+    @Override protected void onDestroy(){ handler.removeCallbacks(bridgeLoop); super.onDestroy(); }
 
     @Override void requestBlePermissions(){
-        ArrayList<String> perms = new ArrayList<>();
-        if(android.os.Build.VERSION.SDK_INT>=31){
-            perms.add(android.Manifest.permission.BLUETOOTH_SCAN);
-            perms.add(android.Manifest.permission.BLUETOOTH_CONNECT);
-        } else {
-            perms.add(android.Manifest.permission.ACCESS_FINE_LOCATION);
-        }
+        ArrayList<String> perms=new ArrayList<>();
+        if(android.os.Build.VERSION.SDK_INT>=31){ perms.add(android.Manifest.permission.BLUETOOTH_SCAN); perms.add(android.Manifest.permission.BLUETOOTH_CONNECT); } else perms.add(android.Manifest.permission.ACCESS_FINE_LOCATION);
         if(android.os.Build.VERSION.SDK_INT>=33) perms.add(android.Manifest.permission.POST_NOTIFICATIONS);
         try{ requestPermissions(perms.toArray(new String[0]),10); }catch(Exception ignored){}
     }
+    void requestBackgroundUsePermissions(){ try{ if(android.os.Build.VERSION.SDK_INT>=23){ android.os.PowerManager pm=(android.os.PowerManager)getSystemService(POWER_SERVICE); if(pm!=null&&!pm.isIgnoringBatteryOptimizations(getPackageName())){ android.content.Intent i=new android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS); i.setData(android.net.Uri.parse("package:"+getPackageName())); startActivity(i); } } }catch(Exception ignored){} }
+    void startPersistentService(){ try{ android.content.Intent svc=new android.content.Intent(this,BluettiPersistentService.class); if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(svc); else startService(svc); }catch(Exception ignored){} }
+    void saveAsLastDevice(String mac,String name){ if(mac==null||mac.trim().length()<17)return; if(name==null||name.trim().isEmpty())name="Bluetti"; getSharedPreferences("last_device",0).edit().putString("mac",mac).putString("name",name).apply(); getSharedPreferences("devices",0).edit().putString(mac,name).apply(); startPersistentService(); }
+    void autoConnectSavedDevice(){ try{ if(bt==null)return; String mac=getSharedPreferences("last_device",0).getString("mac",""); String name=getSharedPreferences("last_device",0).getString("name","Bluetti"); if(mac==null||mac.length()<17)return; selected=bt.getRemoteDevice(mac); selectedName=name; if(deviceTitle!=null)deviceTitle.setText("Dispositivo: "+name+" • "+mac); setStatus("Conectando dispositivo salvo",blue); connectSelected(); }catch(Exception e){ log("Auto conectar: "+e.getMessage()); } }
 
-    void requestBackgroundUsePermissions(){
-        try{
-            if(android.os.Build.VERSION.SDK_INT>=23){
-                android.os.PowerManager pm=(android.os.PowerManager)getSystemService(POWER_SERVICE);
-                if(pm!=null && !pm.isIgnoringBatteryOptimizations(getPackageName())){
-                    android.content.Intent i=new android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-                    i.setData(android.net.Uri.parse("package:"+getPackageName()));
-                    startActivity(i);
-                }
-            }
-        }catch(Exception ignored){}
+    String bridgeUrl(){ return getSharedPreferences("bridge",0).getString("url","http://192.168.1.70:5055"); }
+    void setBridgeStatus(String s,int color){ runOnUiThread(()->{ if(bridgeStatus!=null){ bridgeStatus.setText(s); bridgeStatus.setTextColor(color); } }); }
+    void checkBridgeStatus(){
+        final String url=bridgeUrl();
+        new Thread(()->{
+            java.net.HttpURLConnection c=null;
+            try{
+                java.net.URL u=new java.net.URL(url+"/api/status");
+                c=(java.net.HttpURLConnection)u.openConnection();
+                c.setConnectTimeout(2500); c.setReadTimeout(2500); c.setRequestMethod("GET");
+                int code=c.getResponseCode();
+                if(code>=200&&code<300) setBridgeStatus("Raspberry: online • "+url,greenDark); else setBridgeStatus("Raspberry: erro "+code,red);
+            }catch(Exception e){ setBridgeStatus("Raspberry: offline • "+url,red); }
+            finally{ try{ if(c!=null)c.disconnect(); }catch(Exception ignored){} }
+        }).start();
     }
 
-    void startPersistentService(){
-        try{
-            android.content.Intent svc=new android.content.Intent(this,BluettiPersistentService.class);
-            if(android.os.Build.VERSION.SDK_INT>=26) startForegroundService(svc); else startService(svc);
-        }catch(Exception ignored){}
-    }
-
-    void saveAsLastDevice(String mac,String name){
-        if(mac==null || mac.trim().length()<17)return;
-        if(name==null || name.trim().isEmpty())name="Bluetti";
-        getSharedPreferences("last_device",0).edit().putString("mac",mac).putString("name",name).apply();
-        getSharedPreferences("devices",0).edit().putString(mac,name).apply();
-        startPersistentService();
-    }
-
-    void autoConnectSavedDevice(){
-        try{
-            if(bt==null)return;
-            String mac=getSharedPreferences("last_device",0).getString("mac","");
-            String name=getSharedPreferences("last_device",0).getString("name","Bluetti");
-            if(mac==null || mac.length()<17)return;
-            selected=bt.getRemoteDevice(mac);
-            selectedName=name;
-            if(deviceTitle!=null)deviceTitle.setText("Dispositivo: "+name+" • "+mac);
-            setStatus("Conectando dispositivo salvo", blue);
-            connectSelected();
-        }catch(Exception e){ log("Auto conectar: "+e.getMessage()); }
-    }
-
-    @Override void addManualDevice(){
-        String n=manualName.getText().toString().trim();
-        String m=manualMac.getText().toString().trim().toUpperCase(Locale.ROOT);
-        if(n.isEmpty()) n="Bluetti";
-        if(!m.matches("([0-9A-F]{2}:){5}[0-9A-F]{2}")){ log("MAC inválido"); return; }
-        saveAsLastDevice(m,n);
-        manualName.setText(""); manualMac.setText(""); renderSavedDevices();
-        try{ selected=bt.getRemoteDevice(m); selectedName=n; deviceTitle.setText("Dispositivo: "+n+" • "+m); connectSelected(); }catch(Exception ignored){}
-    }
-
-    @Override void saveFoundDevice(String name,String mac){
-        if(mac==null||mac.isEmpty())return;
-        if(name==null||name.isEmpty()) name="Bluetti";
-        saveAsLastDevice(mac,name);
-        renderSavedDevices();
-    }
-
-    @Override void renderSavedDevices(){
-        if(savedBox==null)return;
-        savedBox.removeAllViews();
-        Map<String,?> all=getSharedPreferences("devices",0).getAll();
-        if(all.isEmpty()){ savedBox.addView(tv("Nenhuma Bluetti salva ainda.",13,Color.DKGRAY)); return; }
-        for(String mac: all.keySet()){
-            String name=String.valueOf(all.get(mac));
-            LinearLayout c=card();
-            c.addView(tv(name,17,text));
-            c.addView(tv(mac,13,muted));
-            Button b=btn("Usar esta Bluetti");
-            c.addView(b); savedBox.addView(c);
-            b.setOnClickListener(v->{
-                try{
-                    saveAsLastDevice(mac,name);
-                    selected=bt.getRemoteDevice(mac); selectedName=name;
-                    deviceTitle.setText("Dispositivo: "+name+" • "+mac);
-                    connectSelected();
-                }catch(Exception e){ log("Erro ao usar Bluetti salva: "+e.getMessage()); }
-            });
-        }
-    }
-
-    @Override void connectSelected(){
-        if(selected!=null){
-            try{ saveAsLastDevice(selected.getAddress(), selectedName==null||selectedName.isEmpty()?selected.getAddress():selectedName); }catch(Exception ignored){}
-        }
-        startPersistentService();
-        super.connectSelected();
-    }
+    @Override void addManualDevice(){ String n=manualName.getText().toString().trim(); String m=manualMac.getText().toString().trim().toUpperCase(Locale.ROOT); if(n.isEmpty())n="Bluetti"; if(!m.matches("([0-9A-F]{2}:){5}[0-9A-F]{2}")){log("MAC inválido");return;} saveAsLastDevice(m,n); manualName.setText(""); manualMac.setText(""); renderSavedDevices(); try{selected=bt.getRemoteDevice(m);selectedName=n;deviceTitle.setText("Dispositivo: "+n+" • "+m);connectSelected();}catch(Exception ignored){} }
+    @Override void saveFoundDevice(String name,String mac){ if(mac==null||mac.isEmpty())return; if(name==null||name.isEmpty())name="Bluetti"; saveAsLastDevice(mac,name); renderSavedDevices(); }
+    @Override void renderSavedDevices(){ if(savedBox==null)return; savedBox.removeAllViews(); Map<String,?> all=getSharedPreferences("devices",0).getAll(); if(all.isEmpty()){ savedBox.addView(tv("Nenhuma Bluetti salva ainda.",13,Color.DKGRAY)); return; } for(String mac:all.keySet()){ String name=String.valueOf(all.get(mac)); LinearLayout c=card(); c.addView(tv(name,17,text)); c.addView(tv(mac,13,muted)); Button b=btn("Usar esta Bluetti"); c.addView(b); savedBox.addView(c); b.setOnClickListener(v->{ try{ saveAsLastDevice(mac,name); selected=bt.getRemoteDevice(mac); selectedName=name; deviceTitle.setText("Dispositivo: "+name+" • "+mac); connectSelected(); }catch(Exception e){log("Erro ao usar Bluetti salva: "+e.getMessage());} }); } }
+    @Override void connectSelected(){ if(selected!=null){ try{ saveAsLastDevice(selected.getAddress(),selectedName==null||selectedName.isEmpty()?selected.getAddress():selectedName); }catch(Exception ignored){} } startPersistentService(); super.connectSelected(); }
 
     int dp(int v){return (int)(v*getResources().getDisplayMetrics().density+.5f);} 
-    GradientDrawable bgRound(int color, int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(radius));return g;}
-    GradientDrawable bgStroke(int color, int radius, int strokeColor){GradientDrawable g=bgRound(color,radius);g.setStroke(dp(1),strokeColor);return g;}
-
+    GradientDrawable bgRound(int color,int radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(radius));return g;}
+    GradientDrawable bgStroke(int color,int radius,int strokeColor){GradientDrawable g=bgRound(color,radius);g.setStroke(dp(1),strokeColor);return g;}
     @Override TextView tv(String t,int sp,int c){TextView v=new TextView(this);v.setText(t);v.setTextSize(sp);v.setTextColor(c==Color.DKGRAY?muted:c);v.setPadding(dp(4),dp(3),dp(4),dp(3));if(sp>=18)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);v.setSingleLine(false);return v;}
     @Override Button btn(String t){Button b=new Button(this);b.setText(t);b.setAllCaps(false);b.setTextColor(blue);b.setTextSize(12);b.setTypeface(Typeface.DEFAULT,Typeface.BOLD);b.setMinHeight(dp(44));b.setPadding(dp(10),dp(4),dp(10),dp(4));b.setBackground(bgRound(Color.rgb(232,239,250),999));b.setElevation(dp(2));return b;}
     @Override LinearLayout card(){LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setPadding(dp(18),dp(18),dp(18),dp(18));c.setBackground(bgStroke(white,28,Color.rgb(220,227,236)));c.setElevation(dp(7));LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.setMargins(dp(16),dp(10),dp(16),dp(10));c.setLayoutParams(lp);return c;}
     @Override TextView metric(String title){TextView v=tv(title+": --",15,text);v.setBackground(bgStroke(white,24,Color.rgb(220,227,236)));v.setElevation(dp(4));v.setGravity(Gravity.CENTER_VERTICAL);v.setPadding(dp(16),dp(14),dp(16),dp(14));v.setMinHeight(dp(96));return v;}
     void two(LinearLayout p,View a,View b){LinearLayout r=new LinearLayout(this);r.setOrientation(LinearLayout.HORIZONTAL);LinearLayout.LayoutParams lp1=new LinearLayout.LayoutParams(0,-2,1);lp1.setMargins(dp(6),dp(6),dp(6),dp(6));LinearLayout.LayoutParams lp2=new LinearLayout.LayoutParams(0,-2,1);lp2.setMargins(dp(6),dp(6),dp(6),dp(6));r.addView(a,lp1);r.addView(b,lp2);p.addView(r);} 
-    void gridAdd(LinearLayout p, View... views){LinearLayout row=null;for(int i=0;i<views.length;i++){if(i%2==0){row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);p.addView(row);}LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);lp.setMargins(dp(6),dp(6),dp(6),dp(6));row.addView(views[i],lp);} }
+    void gridAdd(LinearLayout p,View...views){LinearLayout row=null;for(int i=0;i<views.length;i++){if(i%2==0){row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);p.addView(row);}LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);lp.setMargins(dp(6),dp(6),dp(6),dp(6));row.addView(views[i],lp);}}
     TextView label(String s){TextView v=tv(s,11,muted);v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);v.setLetterSpacing(.08f);return v;}
     TextView chip(String s){TextView v=tv(s,10,greenDark);v.setGravity(Gravity.CENTER);v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);v.setBackground(bgStroke(Color.rgb(221,248,234),999,Color.rgb(180,236,206)));v.setPadding(dp(12),dp(4),dp(12),dp(4));return v;}
     void styleInput(EditText e){e.setTextColor(text);e.setHintTextColor(muted);e.setTextSize(14);e.setTypeface(Typeface.DEFAULT,Typeface.BOLD);e.setSingleLine(true);e.setMinHeight(dp(46));e.setPadding(dp(14),0,dp(14),0);e.setGravity(Gravity.CENTER_VERTICAL);e.setBackground(bgRound(Color.rgb(238,242,247),12));}
@@ -141,33 +75,19 @@ public class ModernMainActivity extends MainActivity {
     @Override void buildUi(){
         ScrollView sv=new ScrollView(this);root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(bg);root.setPadding(0,dp(10),0,dp(28));sv.addView(root);
         LinearLayout top=new LinearLayout(this);top.setGravity(Gravity.CENTER_VERTICAL);top.setPadding(dp(16),0,dp(16),0);top.setBackgroundColor(Color.rgb(244,252,241));top.addView(tv("☰",24,text),new LinearLayout.LayoutParams(0,dp(64),1));TextView title=tv("BLUETTI",20,text);title.setGravity(Gravity.CENTER);title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);top.addView(title,new LinearLayout.LayoutParams(0,dp(64),2));TextView gear=tv("⚙",22,text);gear.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);top.addView(gear,new LinearLayout.LayoutParams(0,dp(64),1));root.addView(top);
-
-        LinearLayout hero=card();hero.setOrientation(LinearLayout.HORIZONTAL);hero.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout mid=new LinearLayout(this);mid.setOrientation(LinearLayout.VERTICAL);heroName=tv("BLUETTI",20,text);heroName.setTypeface(Typeface.DEFAULT,Typeface.BOLD);status=chip("Status: Aguardando");deviceTitle=tv("Dispositivo: --\nSN: --\nMAC: --",10,muted);mid.addView(heroName);mid.addView(status);mid.addView(deviceTitle);hero.addView(mid,new LinearLayout.LayoutParams(0,-2,1));
-        LinearLayout right=new LinearLayout(this);right.setGravity(Gravity.CENTER);right.setOrientation(LinearLayout.VERTICAL);heroSoc=tv("--%",32,green);heroSoc.setGravity(Gravity.CENTER);heroSoc.setBackground(bgStroke(Color.WHITE,999,Color.rgb(230,236,245)));heroSoc.setPadding(dp(18),dp(18),dp(18),dp(18));right.addView(heroSoc,new LinearLayout.LayoutParams(dp(104),dp(104)));heroTime=tv("Sem consumo\n-- rest.",10,muted);heroTime.setGravity(Gravity.CENTER);right.addView(heroTime);hero.addView(right,new LinearLayout.LayoutParams(dp(120),-2));root.addView(hero);
-
-        LinearLayout metrics=new LinearLayout(this);metrics.setOrientation(LinearLayout.VERTICAL);metrics.setPadding(dp(10),0,dp(10),0);gridAdd(metrics,stat("▮","Bateria","--%",green),stat("↯","Entrada","--W",blue),stat("⚡","Saída","--W",orange),stat("♁","DC","--V",purple));root.addView(metrics);
-        battery=statBattery;acIn=statInput;acOut=statOutput;dcOut=statDc;dcIn=tv("Entrada DC: -- W",14,text);acState=tv("AC --",14,text);dcState=tv("DC --",14,text);
-        batteryGraph=new GraphView(this,"",100);batteryGraph.setVisibility(View.GONE);consumptionGraph=new GraphView(this,"",1000);consumptionGraph.setVisibility(View.GONE);showBatteryGraph=new CheckBox(this);showConsumptionGraph=new CheckBox(this);
-
+        LinearLayout hero=card();hero.setOrientation(LinearLayout.HORIZONTAL);hero.setGravity(Gravity.CENTER_VERTICAL);LinearLayout mid=new LinearLayout(this);mid.setOrientation(LinearLayout.VERTICAL);heroName=tv("BLUETTI",20,text);heroName.setTypeface(Typeface.DEFAULT,Typeface.BOLD);status=chip("Status: Aguardando");deviceTitle=tv("Dispositivo: --\nSN: --\nMAC: --",10,muted);mid.addView(heroName);mid.addView(status);mid.addView(deviceTitle);hero.addView(mid,new LinearLayout.LayoutParams(0,-2,1));LinearLayout right=new LinearLayout(this);right.setGravity(Gravity.CENTER);right.setOrientation(LinearLayout.VERTICAL);heroSoc=tv("--%",32,green);heroSoc.setGravity(Gravity.CENTER);heroSoc.setBackground(bgStroke(Color.WHITE,999,Color.rgb(230,236,245)));heroSoc.setPadding(dp(18),dp(18),dp(18),dp(18));right.addView(heroSoc,new LinearLayout.LayoutParams(dp(104),dp(104)));heroTime=tv("Sem consumo\n-- rest.",10,muted);heroTime.setGravity(Gravity.CENTER);right.addView(heroTime);hero.addView(right,new LinearLayout.LayoutParams(dp(120),-2));root.addView(hero);
+        LinearLayout bridge=card();bridge.addView(tv("Raspberry Bridge",20,text));bridgeStatus=chip("Raspberry: verificando");bridge.addView(bridgeStatus);bridgeUrlInput=new EditText(this);bridgeUrlInput.setHint("URL do Raspberry");bridgeUrlInput.setText(bridgeUrl());styleInput(bridgeUrlInput);bridge.addView(bridgeUrlInput);Button saveBridge=btn("Salvar/Testar Bridge");bridge.addView(saveBridge);root.addView(bridge);saveBridge.setOnClickListener(v->{getSharedPreferences("bridge",0).edit().putString("url",bridgeUrlInput.getText().toString().trim()).apply();checkBridgeStatus();});
+        LinearLayout metrics=new LinearLayout(this);metrics.setOrientation(LinearLayout.VERTICAL);metrics.setPadding(dp(10),0,dp(10),0);gridAdd(metrics,stat("▮","Bateria","--%",green),stat("↯","Entrada","--W",blue),stat("⚡","Saída","--W",orange),stat("♁","DC","--V",purple));root.addView(metrics);battery=statBattery;acIn=statInput;acOut=statOutput;dcOut=statDc;dcIn=tv("Entrada DC: -- W",14,text);acState=tv("AC --",14,text);dcState=tv("DC --",14,text);batteryGraph=new GraphView(this,"",100);batteryGraph.setVisibility(View.GONE);consumptionGraph=new GraphView(this,"",1000);consumptionGraph.setVisibility(View.GONE);showBatteryGraph=new CheckBox(this);showConsumptionGraph=new CheckBox(this);
         LinearLayout controls=new LinearLayout(this);controls.setOrientation(LinearLayout.VERTICAL);controls.setPadding(dp(10),0,dp(10),0);Button acOn=powerButton("⏻  AC LIGAR",Color.rgb(221,248,234)),acOff=powerButton("♨  AC DESLIGAR",Color.rgb(255,226,226)),dcOn=powerButton("☷  DC LIGAR",Color.rgb(221,248,234)),dcOff=powerButton("☷  DC DESLIGAR",Color.rgb(255,226,226));gridAdd(controls,acOn,acOff,dcOn,dcOff);root.addView(controls);
-
-        LinearLayout auto=card();auto.addView(tv("Automação",20,text));autoEnable=new CheckBox(this);autoEnable.setText("Ativar automação local");autoEnable.setTextColor(text);autoEnable.setTextSize(14);autoAc=new CheckBox(this);autoAc.setText("Automatizar AC");autoAc.setTextColor(text);autoAc.setTextSize(14);autoDc=new CheckBox(this);autoDc.setText("Automatizar DC");autoDc.setTextColor(text);autoDc.setTextSize(14);auto.addView(autoEnable);auto.addView(autoAc);auto.addView(autoDc);
-        LinearLayout pair=new LinearLayout(this);pair.setOrientation(LinearLayout.HORIZONTAL);LinearLayout minBox=new LinearLayout(this);minBox.setOrientation(LinearLayout.VERTICAL);minBox.addView(label("MÍNIMO (%)"));lowPct=new EditText(this);lowPct.setHint("20");lowPct.setInputType(2);styleInput(lowPct);minBox.addView(lowPct);LinearLayout maxBox=new LinearLayout(this);maxBox.setOrientation(LinearLayout.VERTICAL);maxBox.addView(label("MÁXIMO (%)"));highPct=new EditText(this);highPct.setHint("80");highPct.setInputType(2);styleInput(highPct);maxBox.addView(highPct);pair.addView(minBox,new LinearLayout.LayoutParams(0,-2,1));pair.addView(maxBox,new LinearLayout.LayoutParams(0,-2,1));auto.addView(pair);
-        auto.addView(label("INTERVALO (S)"));intervalSec=new EditText(this);intervalSec.setHint("30");intervalSec.setInputType(2);styleInput(intervalSec);auto.addView(intervalSec,new LinearLayout.LayoutParams(-1,-2));Button save=solidButton("▣  Salvar",greenDark),test=solidButton("▷  Testar",Color.rgb(0,90,193));two(auto,save,test);automationStatus=tv("Automação: desligada",13,muted);auto.addView(automationStatus);root.addView(auto);
-
+        LinearLayout auto=card();auto.addView(tv("Automação",20,text));autoEnable=new CheckBox(this);autoEnable.setText("Ativar automação local");autoEnable.setTextColor(text);autoEnable.setTextSize(14);autoAc=new CheckBox(this);autoAc.setText("Automatizar AC");autoAc.setTextColor(text);autoAc.setTextSize(14);autoDc=new CheckBox(this);autoDc.setText("Automatizar DC");autoDc.setTextColor(text);autoDc.setTextSize(14);auto.addView(autoEnable);auto.addView(autoAc);auto.addView(autoDc);LinearLayout pair=new LinearLayout(this);pair.setOrientation(LinearLayout.HORIZONTAL);LinearLayout minBox=new LinearLayout(this);minBox.setOrientation(LinearLayout.VERTICAL);minBox.addView(label("MÍNIMO (%)"));lowPct=new EditText(this);lowPct.setHint("20");lowPct.setInputType(2);styleInput(lowPct);minBox.addView(lowPct);LinearLayout maxBox=new LinearLayout(this);maxBox.setOrientation(LinearLayout.VERTICAL);maxBox.addView(label("MÁXIMO (%)"));highPct=new EditText(this);highPct.setHint("80");highPct.setInputType(2);styleInput(highPct);maxBox.addView(highPct);pair.addView(minBox,new LinearLayout.LayoutParams(0,-2,1));pair.addView(maxBox,new LinearLayout.LayoutParams(0,-2,1));auto.addView(pair);auto.addView(label("INTERVALO (S)"));intervalSec=new EditText(this);intervalSec.setHint("30");intervalSec.setInputType(2);styleInput(intervalSec);auto.addView(intervalSec,new LinearLayout.LayoutParams(-1,-2));Button save=solidButton("▣  Salvar",greenDark),test=solidButton("▷  Testar",Color.rgb(0,90,193));two(auto,save,test);automationStatus=tv("Automação: desligada",13,muted);auto.addView(automationStatus);root.addView(auto);
         LinearLayout dev=card();dev.addView(tv("Outros Dispositivos",20,text));manualName=new EditText(this);manualName.setHint("Nome da Bluetti");styleInput(manualName);manualMac=new EditText(this);manualMac.setHint("MAC Bluetooth");styleInput(manualMac);dev.addView(manualName);dev.addView(manualMac);Button add=btn("Adicionar"),clear=btn("Limpar lista");two(dev,add,clear);savedBox=new LinearLayout(this);savedBox.setOrientation(LinearLayout.VERTICAL);dev.addView(savedBox);root.addView(dev);
-
-        LinearLayout conn=card();conn.addView(tv("Conexão",20,text));Button scan=btn("Buscar"),stop=btn("Parar"),connect=btn("Conectar"),disconnect=btn("Desconectar"),refresh=btn("Atualizar"),reconnect=btn("Reconectar");gridAdd(conn,scan,stop,connect,disconnect,refresh,reconnect);root.addView(conn);
-        list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);root.addView(list);LinearLayout log=card();log.addView(tv("Registros de Atividade",20,text));logBox=new LinearLayout(this);logBox.setOrientation(LinearLayout.VERTICAL);log.addView(logBox);root.addView(log);
-
+        LinearLayout conn=card();conn.addView(tv("Conexão",20,text));Button scan=btn("Buscar"),stop=btn("Parar"),connect=btn("Conectar"),disconnect=btn("Desconectar"),refresh=btn("Atualizar"),reconnect=btn("Reconectar");gridAdd(conn,scan,stop,connect,disconnect,refresh,reconnect);root.addView(conn);list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);root.addView(list);LinearLayout log=card();log.addView(tv("Registros de Atividade",20,text));logBox=new LinearLayout(this);logBox.setOrientation(LinearLayout.VERTICAL);log.addView(logBox);root.addView(log);
         scan.setOnClickListener(v->startScan());stop.setOnClickListener(v->stopScan());connect.setOnClickListener(v->autoConnectSavedDevice());disconnect.setOnClickListener(v->disconnect());refresh.setOnClickListener(v->readStatus());reconnect.setOnClickListener(v->{disconnect();handler.postDelayed(this::autoConnectSavedDevice,800);});acOn.setOnClickListener(v->writeRegister(3007,1));acOff.setOnClickListener(v->writeRegister(3007,0));dcOn.setOnClickListener(v->writeRegister(3008,1));dcOff.setOnClickListener(v->writeRegister(3008,0));add.setOnClickListener(v->addManualDevice());clear.setOnClickListener(v->{getSharedPreferences("devices",0).edit().clear().apply();getSharedPreferences("last_device",0).edit().clear().apply();renderSavedDevices();});save.setOnClickListener(v->{saveAutomation();applyAutomationState();});test.setOnClickListener(v->runAutomationCheck(true));setContentView(sv);
     }
 
     TextView stat(String icon,String label,String value,int color){TextView v=tv(icon+"  "+label.toUpperCase()+"\n"+value,18,color);v.setBackground(bgStroke(white,24,Color.rgb(220,227,236)));v.setElevation(dp(5));v.setGravity(Gravity.CENTER_VERTICAL);v.setPadding(dp(16),dp(14),dp(16),dp(14));v.setMinHeight(dp(96));if(label.equals("Bateria"))statBattery=v;else if(label.equals("Entrada"))statInput=v;else if(label.equals("Saída"))statOutput=v;else statDc=v;return v;}
     Button powerButton(String t,int color){Button b=btn(t);b.setTextColor(Color.BLACK);b.setTextSize(14);b.setMinHeight(dp(64));b.setBackground(bgStroke(color,22,Color.rgb(220,227,236)));b.setElevation(dp(4));return b;}
     Button solidButton(String t,int color){Button b=btn(t);b.setTextColor(Color.WHITE);b.setBackground(bgRound(color,12));b.setElevation(dp(4));return b;}
-
     @Override void parseRead(byte[] pkt){try{if(pkt==null||pkt.length<5)return;int bc=pkt[2]&255,words=bc/2;if(words<2)return;int[] w=new int[words];for(int i=0;i<words&&4+i*2<pkt.length;i++)w[i]=((pkt[3+i*2]&255)<<8)|(pkt[4+i*2]&255);runOnUiThread(()->{if(words>=8){int dci=w[0],aci=w[1],aco=w[2],dco=w[3];lastSoc=w[7];lastConsumption=aco+dco;int inputTotal=aci+dci;heroSoc.setText(lastSoc+"%");statBattery.setText("▮  BATERIA\n"+lastSoc+"%");statInput.setText("↯  ENTRADA\n"+inputTotal+"W");statOutput.setText("⚡  SAÍDA\n"+lastConsumption+"W");statDc.setText("♁  DC\n"+dco+"W");heroTime.setText((lastConsumption>0?formatMinutes((1152*lastSoc/100*60)/Math.max(1,lastConsumption)):"Sem consumo")+"\nTempo restante");setStatus("Conectado",green);runAutomationCheck(false);}else if(words==2){acValue=w[0];dcValue=w[1];}});}catch(Exception e){log("Parser seguro: "+e.getMessage());}}
     String formatMinutes(int min){if(min<=0)return "--";return (min/60)+"h "+(min%60)+"m";}
 }
