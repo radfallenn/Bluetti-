@@ -20,6 +20,8 @@ except Exception:
 CONFIG_PATH = Path("config.yaml")
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
+AUTOMATION_PATH = DATA_DIR / "automation.json"
+EVENTS_PATH = DATA_DIR / "events.jsonl"
 
 FF_NOTIFY = "0000ff01-0000-1000-8000-00805f9b34fb"
 FF_WRITE = "0000ff02-0000-1000-8000-00805f9b34fb"
@@ -28,6 +30,10 @@ FF_WRITE = "0000ff02-0000-1000-8000-00805f9b34fb"
 def load_config() -> Dict[str, Any]:
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
+
+
+def now_iso() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
 
 
 def crc16(data: bytes) -> int:
@@ -46,6 +52,75 @@ def with_crc(body: bytes) -> bytes:
 
 def hexs(data: bytes) -> str:
     return " ".join(f"{b:02X}" for b in data)
+
+
+def default_automation() -> Dict[str, Any]:
+    return {
+        "enabled": False,
+        "cooldown_seconds": 60,
+        "ac": {"enabled": True, "off_below": 20, "on_above": 80},
+        "dc": {"enabled": True, "off_below": 15, "on_above": 75},
+        "rules": {
+            "max_output_w": 0,
+            "min_input_w": 0,
+            "temperature_limit": 0,
+        },
+    }
+
+
+def normalize_automation(data: Dict[str, Any]) -> Dict[str, Any]:
+    cfg = default_automation()
+    cfg.update({k: v for k, v in data.items() if k not in ["ac", "dc", "rules"]})
+    if "ac" in data and isinstance(data["ac"], dict):
+        cfg["ac"].update(data["ac"])
+    if "dc" in data and isinstance(data["dc"], dict):
+        cfg["dc"].update(data["dc"])
+    if "rules" in data and isinstance(data["rules"], dict):
+        cfg["rules"].update(data["rules"])
+    # Compatibilidade com payload antigo do app/README
+    if "ac_off_below" in data:
+        cfg["ac"]["off_below"] = int(data["ac_off_below"])
+    if "ac_on_above" in data:
+        cfg["ac"]["on_above"] = int(data["ac_on_above"])
+    if "dc_off_below" in data:
+        cfg["dc"]["off_below"] = int(data["dc_off_below"])
+    if "dc_on_above" in data:
+        cfg["dc"]["on_above"] = int(data["dc_on_above"])
+    return cfg
+
+
+def load_automation(config: Dict[str, Any]) -> Dict[str, Any]:
+    if AUTOMATION_PATH.exists():
+        try:
+            return normalize_automation(json.loads(AUTOMATION_PATH.read_text(encoding="utf-8")))
+        except Exception:
+            pass
+    return normalize_automation(config.get("automation", {}))
+
+
+def save_automation(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    cfg = normalize_automation(cfg)
+    AUTOMATION_PATH.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    return cfg
+
+
+def append_event(device_id: str, event: str, details: Optional[Dict[str, Any]] = None):
+    row = {"t": time.time(), "iso": now_iso(), "device_id": device_id, "event": event, "details": details or {}}
+    with EVENTS_PATH.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def read_events(limit: int = 120) -> List[Dict[str, Any]]:
+    if not EVENTS_PATH.exists():
+        return []
+    lines = EVENTS_PATH.read_text(encoding="utf-8", errors="ignore").splitlines()[-limit:]
+    out = []
+    for line in lines:
+        try:
+            out.append(json.loads(line))
+        except Exception:
+            pass
+    return out
 
 
 @dataclass
@@ -128,9 +203,8 @@ class MqttBridge:
         if not self.client:
             return
         topic = f"{self.base}/{state.id}"
-        data = state.as_dict()
         try:
-            self.client.publish(f"{topic}/status", json.dumps(data), retain=True)
+            self.client.publish(f"{topic}/status", json.dumps(state.as_dict()), retain=True)
             self.client.publish(f"{topic}/battery", state.battery if state.battery is not None else "", retain=True)
             self.client.publish(f"{topic}/input_total", state.input_total_w, retain=True)
             self.client.publish(f"{topic}/output_total", state.output_total_w, retain=True)
@@ -145,9 +219,7 @@ class BluettiDevice:
     def __init__(self, cfg: Dict[str, Any], bridge: "Bridge"):
         self.cfg = cfg
         self.bridge = bridge
-        self.state = BluettiState(
-            id=cfg["id"], name=cfg.get("name", cfg["id"]), model=cfg.get("model", "Bluetti"), mac=cfg["mac"]
-        )
+        self.state = BluettiState(id=cfg["id"], name=cfg.get("name", cfg["id"]), model=cfg.get("model", "Bluetti"), mac=cfg["mac"])
         self.client: Optional[BleakClient] = None
         self.write_char: Optional[str] = None
         self.notify_char: Optional[str] = None
@@ -167,6 +239,7 @@ class BluettiDevice:
             except Exception as e:
                 self.state.last_error = str(e)
                 self.state.online = False
+                append_event(self.state.id, "connection_error", {"error": str(e)})
                 await self.disconnect()
                 await self.bridge.broadcast()
                 await asyncio.sleep(float(self.bridge.config["bridge"].get("reconnect_interval_seconds", 10)))
@@ -175,6 +248,7 @@ class BluettiDevice:
         self.state.last_error = ""
         self.state.connected = False
         self.state.ready = False
+        append_event(self.state.id, "connecting", {"mac": self.state.mac})
         self.client = BleakClient(self.state.mac, timeout=20)
         await self.client.connect()
         self.state.connected = True
@@ -183,6 +257,7 @@ class BluettiDevice:
             await self.client.start_notify(self.notify_char, self.on_notify)
         self.state.ready = bool(self.write_char)
         self.state.online = self.state.ready
+        append_event(self.state.id, "connected", {"ready": self.state.ready})
         await self.bridge.broadcast()
 
     async def disconnect(self):
@@ -307,16 +382,13 @@ class BluettiDevice:
                 self.state.dc_enabled = words[1] == 1
             self.state.input_total_w = int(self.state.ac_input_w or 0) + int(self.state.dc_input_w or 0)
             self.state.output_total_w = int(self.state.ac_output_w or 0) + int(self.state.dc_output_w or 0)
+            if self.state.output_total_w > 0 and self.state.battery is not None:
+                self.state.remaining_minutes = int((1152 * self.state.battery / 100) / max(1, self.state.output_total_w) * 60)
             self.state.online = True
             self.state.connected = True
             self.state.ready = True
             self.state.updated_at = time.time()
-            self.state.history.append({
-                "t": self.state.updated_at,
-                "battery": self.state.battery,
-                "input": self.state.input_total_w,
-                "output": self.state.output_total_w,
-            })
+            self.state.history.append({"t": self.state.updated_at, "battery": self.state.battery, "input": self.state.input_total_w, "output": self.state.output_total_w})
             max_points = int(self.bridge.config["bridge"].get("history_max_points", 720))
             self.state.history = self.state.history[-max_points:]
             asyncio.create_task(self.bridge.broadcast())
@@ -336,38 +408,51 @@ class BluettiDevice:
             await self.write_register(3008, 0)
         else:
             raise ValueError("unknown command")
+        append_event(self.state.id, "manual_command", {"command": command})
+
+    async def automation_command(self, command: str, reason: str):
+        now = time.time()
+        if now - self.last_command_at < float(self.bridge.automation.get("cooldown_seconds", 60)):
+            return
+        await self.command(command)
+        self.last_command_at = now
+        append_event(self.state.id, "automation_command", {"command": command, "reason": reason, "battery": self.state.battery, "input": self.state.input_total_w, "output": self.state.output_total_w})
+        await self.bridge.broadcast()
 
     async def run_automation(self):
-        cfg = self.bridge.config.get("automation", {})
+        cfg = self.bridge.automation
         if not cfg.get("enabled") or self.state.battery is None:
             return
-        now = time.time()
-        if now - self.last_command_at < float(cfg.get("cooldown_seconds", 60)):
-            return
-        b = self.state.battery
-        if b <= int(cfg.get("ac_off_below", 20)):
-            await self.command("ac_off")
-            self.last_command_at = now
-        if b <= int(cfg.get("dc_off_below", 15)):
-            await self.command("dc_off")
-            self.last_command_at = now
-        if b >= int(cfg.get("ac_on_above", 80)):
-            await self.command("ac_on")
-            self.last_command_at = now
-        if b >= int(cfg.get("dc_on_above", 75)):
-            await self.command("dc_on")
-            self.last_command_at = now
+        b = int(self.state.battery)
+        ac = cfg.get("ac", {})
+        dc = cfg.get("dc", {})
+        rules = cfg.get("rules", {})
+        if ac.get("enabled", True):
+            if b <= int(ac.get("off_below", 20)) and self.state.ac_enabled is not False:
+                await self.automation_command("ac_off", f"battery <= {ac.get('off_below')}")
+            elif b >= int(ac.get("on_above", 80)) and self.state.ac_enabled is not True:
+                await self.automation_command("ac_on", f"battery >= {ac.get('on_above')}")
+        if dc.get("enabled", True):
+            if b <= int(dc.get("off_below", 15)) and self.state.dc_enabled is not False:
+                await self.automation_command("dc_off", f"battery <= {dc.get('off_below')}")
+            elif b >= int(dc.get("on_above", 75)) and self.state.dc_enabled is not True:
+                await self.automation_command("dc_on", f"battery >= {dc.get('on_above')}")
+        max_out = int(rules.get("max_output_w") or 0)
+        if max_out > 0 and self.state.output_total_w > max_out:
+            await self.automation_command("ac_off", f"output > {max_out}W")
 
 
 class Bridge:
     def __init__(self):
         self.config = load_config()
+        self.automation = load_automation(self.config)
         self.devices: Dict[str, BluettiDevice] = {}
         self.websockets: List[WebSocket] = []
         self.mqtt = MqttBridge(self.config.get("mqtt", {}))
 
     async def start(self):
         self.mqtt.start()
+        append_event("bridge", "started", {"automation": self.automation})
         for d in self.config.get("devices", []):
             if d.get("enabled", True):
                 dev = BluettiDevice(d, self)
@@ -389,11 +474,16 @@ class Bridge:
                 self.websockets.remove(ws)
 
     def status(self):
-        return {"devices": {k: d.state.as_dict() for k, d in self.devices.items()}, "automation": self.config.get("automation", {})}
+        return {"ok": True, "bridge": {"online": True, "time": now_iso()}, "devices": {k: d.state.as_dict() for k, d in self.devices.items()}, "automation": self.automation, "events": read_events(40)}
+
+    def set_automation(self, payload: Dict[str, Any]):
+        self.automation = save_automation(payload)
+        append_event("bridge", "automation_saved", self.automation)
+        return self.automation
 
 
 bridge = Bridge()
-app = FastAPI(title="Bluetti Bridge", version="1.0.0")
+app = FastAPI(title="Bluetti Bridge", version="2.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
@@ -404,12 +494,25 @@ async def startup():
 
 @app.get("/")
 async def dashboard():
-    return HTMLResponse(Path("web/index.html").read_text(encoding="utf-8"))
+    index = Path("web/index.html")
+    if index.exists():
+        return HTMLResponse(index.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>Bluetti Bridge</h1><p>API online.</p>")
+
+
+@app.get("/health")
+async def health():
+    return {"ok": True, "service": "bluetti-bridge", "time": now_iso()}
 
 
 @app.get("/api/status")
 async def api_status():
     return bridge.status()
+
+
+@app.get("/api/events")
+async def api_events(limit: int = 120):
+    return {"events": read_events(limit)}
 
 
 @app.get("/api/devices/{device_id}/status")
@@ -427,6 +530,7 @@ async def api_command(device_id: str, target: str, action: str):
         return JSONResponse({"error": "device not found"}, status_code=404)
     cmd = f"{target}_{action}" if target in ["ac", "dc"] else action
     await dev.command(cmd)
+    await bridge.broadcast()
     return {"ok": True, "command": cmd}
 
 
@@ -441,13 +545,21 @@ async def api_read(device_id: str):
 
 @app.get("/api/automation")
 async def get_automation():
-    return bridge.config.get("automation", {})
+    return bridge.automation
 
 
 @app.post("/api/automation")
 async def set_automation(payload: Dict[str, Any]):
-    bridge.config["automation"].update(payload)
-    return bridge.config["automation"]
+    result = bridge.set_automation(payload)
+    await bridge.broadcast()
+    return result
+
+
+@app.post("/api/automation/test")
+async def test_automation():
+    for dev in bridge.devices.values():
+        await dev.run_automation()
+    return {"ok": True, "automation": bridge.automation}
 
 
 @app.websocket("/ws")
